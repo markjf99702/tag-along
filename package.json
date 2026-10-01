@@ -1,0 +1,9 @@
+{
+  "name": "tag-along",
+  "private": true,
+  "type": "module",
+  "description": "Write a run of numbered NFC stickers from your phone, one tap each.",
+  "scripts": {
+    "test": "node --test test/tags.test.mjs && node test/e2e.mjs"
+  }
+}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tag Along</title>
+  <meta name="description" content="Write a run of NFC stickers in order from your phone: hold one blank tag after another to the back of the phone and each gets the next number, ready for a bag, a box or a bin.">
+  <meta property="og:title" content="Tag Along">
+  <meta property="og:description" content="Write a run of numbered NFC stickers from your phone, one tap each.">
+  <meta property="og:image" content="https://junkdrawer.works/tag-along/og.png">
+  <meta property="og:url" content="https://junkdrawer.works/tag-along/">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#F1EFE8" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161714" media="(prefers-color-scheme: dark)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="preload" href="fonts/barlow-condensed-700.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/barlow-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<noscript>Tag Along needs JavaScript to talk to the phone's NFC reader.</noscript>
+<main class="wrap">
+  <header class="top">
+    <h1>Tag Along</h1>
+    <p class="sub">Numbered NFC stickers, one tap each.</p>
+  </header>
+
+  <nav class="modes" role="tablist" aria-label="Mode">
+    <button type="button" role="tab" id="tab-write" aria-selected="true" aria-controls="write">Write</button>
+    <button type="button" role="tab" id="tab-check" aria-selected="false" aria-controls="check">Check a tag</button>
+  </nav>
+
+  <p class="unsupported" id="unsupported" hidden></p>
+
+  <section id="write" role="tabpanel" aria-labelledby="tab-write">
+    <div class="tape-wrap">
+      <span class="tape-cap">Next tag</span>
+      <div class="tape" id="tape" aria-live="polite"><span id="num">#001</span></div>
+      <div class="adjust">
+        <button type="button" class="ghost" id="back" aria-label="Back one number">− 1</button>
+        <button type="button" class="ghost" id="skip" aria-label="Skip this number">Skip +1</button>
+      </div>
+    </div>
+
+    <p class="status" id="status">Press Start, then hold a blank sticker to the back of the phone.</p>
+    <button type="button" class="go" id="go">Start</button>
+
+    <details class="settings">
+      <summary>Settings</summary>
+      <div class="field">
+        <label for="next">Next number</label>
+        <input id="next" type="number" inputmode="numeric" min="0" max="999999">
+      </div>
+      <div class="field">
+        <label for="digits">Digits</label>
+        <select id="digits"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option></select>
+      </div>
+      <div class="field wide">
+        <label for="prefix">Link written before the number</label>
+        <input id="prefix" type="url" spellcheck="false" autocomplete="off">
+        <button type="button" class="ghost small" id="reset-prefix">Use the Stockroom link</button>
+      </div>
+      <label class="check wide"><input id="protect" type="checkbox" checked> Don't write over a tag that already has something on it</label>
+      <p class="example wide">The next tag will hold <code id="example"></code></p>
+    </details>
+
+    <div class="log" id="log-wrap" hidden>
+      <h2>Written this session</h2>
+      <ol id="log" reversed></ol>
+    </div>
+  </section>
+
+  <section id="check" role="tabpanel" aria-labelledby="tab-check" hidden>
+    <p class="status" id="check-status">Press Check, then hold a tag to the back of the phone to see what's on it.</p>
+    <button type="button" class="go" id="check-go">Check</button>
+    <div class="readout" id="readout" hidden></div>
+  </section>
+</main>
+
+<footer class="jd-foot">
+  <a href="https://junkdrawer.works/">Part of junkdrawer.works</a>
+  <span aria-hidden="true">·</span>
+  <a href="https://junkdrawer.works/privacy.html">Privacy</a>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

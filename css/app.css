@@ -55,6 +55,8 @@ button { cursor: pointer; }
 }
 .tape span {
   font: 700 104px/1 var(--display); letter-spacing: .02em; font-variant-numeric: tabular-nums;
+  /* smaller when a long number wouldn't fit across the page: --n is the label's length, about .55em a character */
+  font-size: min(104px, (min(520px, 100vw - 32px) - 68px) / (var(--n, 4) * .55));
   /* embossed: a light edge above, a dark one below */
   text-shadow: 0 -1px 0 rgba(255,255,255,.45), 0 2px 0 rgba(0,0,0,.18);
 }
@@ -108,5 +110,5 @@ button { cursor: pointer; }
 .jd-foot a { color: inherit; text-decoration: none; }
 .jd-foot a:hover, .jd-foot a:focus-visible { text-decoration: underline; }
 
-@media (max-width: 380px) { .tape span { font-size: 84px; } }
+@media (max-width: 380px) { .tape span { font-size: min(84px, (100vw - 100px) / (var(--n, 4) * .55)); } }
 @media (prefers-reduced-motion: reduce) { .tape { transition: none; } .tape.err { animation: none; } }

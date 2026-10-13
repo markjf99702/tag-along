@@ -28,7 +28,9 @@ function supportProblem() {
 
 // ---------------------------------------------------------------- render
 function render() {
-  $('num').textContent = '#' + pad(settings.next, settings.digits);
+  const label = '#' + pad(settings.next, settings.digits);
+  $('num').textContent = label;
+  $('num').style.setProperty('--n', label.length); // the CSS shrinks a long number to fit
   $('next').value = settings.next;
   $('digits').value = String(settings.digits);
   $('prefix').value = settings.prefix;

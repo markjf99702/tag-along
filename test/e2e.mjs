@@ -166,6 +166,21 @@ for (const fail of [undefined, 'NetworkError']) {
   await p.context().close();
 }
 
+// A long number still fits across the phone: six digits, or a three-digit run that has gone past 999.
+{
+  const p = await phone();
+  for (const width of [390, 320]) {
+    await p.setViewportSize({ width, height: 800 });
+    for (const s of [{ digits: 6, next: 999999 }, { digits: 3, next: 12345 }]) {
+      await p.evaluate(s => localStorage.setItem('tagalong.v1', JSON.stringify(s)), s);
+      await p.reload(); await p.evaluate(() => document.fonts.ready);
+      const fit = await p.evaluate(() => { const r = document.querySelector('#tape').getBoundingClientRect(); return document.documentElement.scrollWidth <= innerWidth && r.left >= 0 && r.right <= innerWidth; });
+      assert.ok(fit, `the tape for ${await p.textContent('#num')} doesn't fit ${width}px`);
+    }
+  }
+  await p.context().close();
+}
+
 
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');

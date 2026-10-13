@@ -29,10 +29,11 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 // A pretend NFC reader that behaves like Chrome's. write() waits for window.__tap(), which plays a sticker touching
 // the phone (__tap({ fail: 'NotAllowedError', message }) plays one that refuses it); a new write() cancels one still
 // waiting, and an aborted one rejects with the signal's reason. nfc.writeError ([name, message]) makes every write
-// fail at once, as on a phone without NFC. nfc.perm is what permissions.query says about NFC, and nfc.locks counts
-// the screen wake locks held.
+// fail at once, as on a phone without NFC. scan() starts listening after nfc.scanDelay ms, or fails with
+// nfc.scanError, and __read([[recordType, text], ...]) plays a tag for it. nfc.perm is what permissions.query says
+// about NFC, and nfc.locks counts the screen wake locks held.
 function fakeNfc() {
-  const nfc = window.__nfc = { written: [], pending: [], writeError: null, perm: 'granted', buzzes: 0, locks: 0 };
+  const nfc = window.__nfc = { written: [], pending: [], writeError: null, scans: [], scanError: null, scanDelay: 0, perm: 'granted', buzzes: 0, locks: 0 };
   window.NDEFReader = class {
     write(msg, o = {}) {
       return new Promise((resolve, reject) => {
@@ -44,7 +45,15 @@ function fakeNfc() {
         o.signal?.addEventListener('abort', () => { const i = nfc.pending.indexOf(w); if (i >= 0) { nfc.pending.splice(i, 1); reject(o.signal.reason); } });
       });
     }
-    async scan() {}
+    scan(o = {}) {
+      return new Promise((resolve, reject) => {
+        const t = setTimeout(() => {
+          if (nfc.scanError) { reject(new DOMException(nfc.scanError[1], nfc.scanError[0])); return; }
+          nfc.scans.push(this); resolve();
+        }, nfc.scanDelay);
+        o.signal?.addEventListener('abort', () => { clearTimeout(t); nfc.scans = nfc.scans.filter(r => r !== this); reject(o.signal.reason); });
+      });
+    }
   };
   window.__tap = ({ fail, message = 'NDEFWriteOptions#overwrite does not allow overwrite.' } = {}) => {
     const w = nfc.pending.shift();
@@ -52,6 +61,11 @@ function fakeNfc() {
     if (fail) w.reject(new DOMException(message, fail));
     else { nfc.written.push(w.msg.records[0].data); w.resolve(); }
     return true;
+  };
+  window.__read = records => {
+    const message = { records: records.map(([recordType, text]) => ({ recordType, data: new TextEncoder().encode(text) })) };
+    for (const r of nfc.scans) r.onreading?.({ message });
+    return nfc.scans.length;
   };
   navigator.vibrate = () => { nfc.buzzes++; return true; };
   Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => {
@@ -222,6 +236,33 @@ for (const fail of [undefined, 'NetworkError']) {
   await statusIs(p, 'bad');
   assert.match(await p.textContent('#status'), /^That tag isn't one Chrome can write/);
   await waitingFor(p, '#001');
+  await p.context().close();
+}
+
+// Check mode has its own words when listening can't start (no stickers, press Check), and a second tap on Check
+// while it starts just stops it.
+{
+  const p = await phone();
+  const check = async (error, perm = 'granted') => {
+    await p.reload(); await p.click('#tab-check');
+    await p.evaluate(([error, perm]) => { window.__nfc.scanError = error; window.__nfc.perm = perm; }, [error, perm]);
+    await p.click('#check-go');
+    await p.waitForFunction(() => document.querySelector('#check-status').classList.contains('bad'));
+    assert.equal(await p.textContent('#check-go'), 'Check');
+    return p.textContent('#check-status');
+  };
+  assert.equal(await check(['NotAllowedError', 'NFC permission request denied.'], 'prompt'), 'NFC isn\'t allowed for this site yet. Press Check and allow it when Chrome asks.');
+  assert.equal(await check(['NotSupportedError', 'NFC is not supported.']), 'Chrome can\'t find an NFC reader on this phone, so it can\'t read tags.');
+  assert.equal(await check(['NotReadableError', 'NFC setting is disabled.']), 'NFC looks switched off. Turn it on in the phone\'s settings (Connected devices → NFC), then press Check.');
+  assert.equal(await check(['InvalidStateError', 'A scan() operation is ongoing.']), 'Couldn\'t start listening for tags (A scan() operation is ongoing.). Press Check to try again.');
+  await p.reload(); await p.click('#tab-check');
+  await p.evaluate(() => { window.__nfc.scanDelay = 1500; });
+  await p.click('#check-go');
+  assert.equal(await p.textContent('#check-go'), 'Stop');
+  await p.click('#check-go');
+  await p.waitForTimeout(1800);
+  assert.equal(await p.textContent('#check-go'), 'Check');
+  assert.equal(await p.getAttribute('#check-status', 'class'), 'status', 'stopping Check on purpose showed an error');
   await p.context().close();
 }
 

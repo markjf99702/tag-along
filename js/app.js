@@ -90,7 +90,7 @@ async function startWriting() {
       await pause(1600, signal); // time to pull the tag away before the next write starts
     } catch (e) {
       if (signal.aborted || e.name === 'AbortError') break;
-      const msg = await explain(e, Date.now() - justWrote < 4000);
+      const msg = await explain(e, { rightAfterWrite: Date.now() - justWrote < 4000 });
       if (signal.aborted) break;
       if (msg.fatal) { status('status', msg.text, 'bad'); break; }
       buzz([40, 60, 40]); flash('err');
@@ -121,22 +121,26 @@ async function writeTag(ndef, n, signal) {
   }
 }
 
-async function explain(e, rightAfterWrite) {
+// What went wrong, in a line for the status. Check mode (checking) never involves a sticker: its scan() only fails
+// for the phone's reasons.
+async function explain(e, { rightAfterWrite = false, checking = false } = {}) {
+  const press = checking ? 'Check' : 'Start';
   let perm = '';
   try { perm = (await navigator.permissions.query({ name: 'nfc' })).state; } catch {}
   if (perm === 'denied') return { fatal: true, text: 'NFC is blocked for this site. Allow it in Chrome: the icon left of the address → Permissions → NFC.' };
-  if (e.name === 'NotAllowedError' && /activation|gesture/i.test(e.message)) return { fatal: true, text: 'Chrome wants a fresh tap before writing. Press Start again.' };
+  if (e.name === 'NotAllowedError' && /activation|gesture/i.test(e.message)) return { fatal: true, text: `Chrome wants a fresh tap before ${checking ? 'checking' : 'writing'}. Press ${press} again.` };
   // The phone, not the sticker. Chrome says "NFC permission request denied." when NFC hasn't been allowed (its
   // question was closed), and "NFC is not supported." when there's no NFC reader ("This tag is not supported." is a tag).
-  if (e.name === 'NotAllowedError' && /permission/i.test(e.message)) return { fatal: true, text: 'NFC isn\'t allowed for this site yet. Press Start and allow it when Chrome asks.' };
-  if (e.name === 'NotSupportedError' && /NFC is not supported|unavailable/i.test(e.message)) return { fatal: true, text: 'Chrome can\'t find an NFC reader on this phone, so it can\'t write tags.' };
+  if (e.name === 'NotAllowedError' && (checking || /permission/i.test(e.message))) return { fatal: true, text: `NFC isn't allowed for this site yet. Press ${press} and allow it when Chrome asks.` };
+  if (e.name === 'NotSupportedError' && (checking || /NFC is not supported|unavailable/i.test(e.message))) return { fatal: true, text: `Chrome can't find an NFC reader on this phone, so it can't ${checking ? 'read' : 'write'} tags.` };
+  if (e.name === 'NotReadableError') return { fatal: true, text: `NFC looks switched off. Turn it on in the phone's settings (Connected devices → NFC), then press ${press}.` };
+  if (checking) return { fatal: true, text: `Couldn't start listening for tags (${e.message || e.name}). Press Check to try again.` };
   if (e.name === 'NotAllowedError' && settings.protect) {
     return rightAfterWrite
       ? { text: 'That\'s the sticker just written. Take it away from the phone, then hold the next one.' }
       : { text: 'That sticker already has something on it, so it was left alone. Use a blank one, or check what it holds first.' };
   }
   if (e.name === 'NotSupportedError') return { text: 'That tag isn\'t one Chrome can write (NTAG213/215/216 stickers work). Try another.' };
-  if (e.name === 'NotReadableError') return { fatal: true, text: 'NFC looks switched off. Turn it on in the phone\'s settings (Connected devices → NFC), then press Start.' };
   return { text: 'Couldn\'t finish writing (' + (e.message || e.name) + '). Hold the sticker flat against the phone and keep it still for a second.' };
 }
 
@@ -151,15 +155,18 @@ function stopWriting(abort = true) {
 async function startChecking() {
   if (supportProblem()) return;
   stopWriting();
-  checking = new AbortController();
+  const ctl = checking = new AbortController();
+  renderCheck(); // the button reads Stop while Chrome starts listening, so a second tap stops it
   const ndef = new NDEFReader();
   try {
-    await ndef.scan({ signal: checking.signal });
+    await ndef.scan({ signal: ctl.signal });
   } catch (e) {
-    checking = null;
-    status('check-status', (await explain(e, false)).text, 'bad');
+    if (ctl.signal.aborted) return; // stopped on purpose
+    if (checking === ctl) checking = null;
+    status('check-status', (await explain(e, { checking: true })).text, 'bad');
     renderCheck(); return;
   }
+  if (ctl.signal.aborted) return;
   status('check-status', 'Listening. Hold a tag to the back of the phone.', 'wait');
   renderCheck();
   ndef.onreading = ev => {

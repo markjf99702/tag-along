@@ -35,3 +35,9 @@ test('describes what a tag holds', () => {
   const d = describe({ records: [{ recordType: 'url', data: enc(STOCKROOM + '009') }] }, s);
   assert.equal(d.number, 9);
 });
+test('calls a tag holding only an empty record blank, and words other records properly', () => {
+  const s = clean({});
+  assert.deepEqual(describe({ records: [{ recordType: 'empty', data: new Uint8Array() }] }, s), describe({ records: [] }, s));
+  assert.deepEqual(describe({ records: [{ recordType: 'unknown', data: new Uint8Array([1]) }] }, s).lines, ['An unknown record']);
+  assert.deepEqual(describe({ records: [{ recordType: 'mime', data: new Uint8Array([1]) }] }, s).lines, ['A mime record']);
+});

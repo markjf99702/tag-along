@@ -47,7 +47,8 @@ export function clean(s) {
 // Turns what a phone read off a tag into a few plain lines.
 export function describe(message, settings) {
   const recs = message?.records || [];
-  if (!recs.length) return { blank: true, lines: ['Blank tag (nothing written yet).'], number: null };
+  // a sticker can come formatted with one empty record: that's blank too
+  if (recs.every(r => r.recordType === 'empty')) return { blank: true, lines: ['Blank tag (nothing written yet).'], number: null };
   const lines = []; let number = null;
   for (const r of recs) {
     let text = '';
@@ -61,7 +62,7 @@ export function describe(message, settings) {
       if (n != null && number == null) number = n;
       lines.push(text);
     } else if (r.recordType === 'text') lines.push('Text: ' + text);
-    else lines.push(`A ${r.recordType} record`);
+    else lines.push(`${/^[aeiou]/i.test(r.recordType) ? 'An' : 'A'} ${r.recordType} record`);
   }
   return { blank: false, lines, number };
 }

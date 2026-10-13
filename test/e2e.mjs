@@ -213,6 +213,18 @@ for (const fail of [undefined, 'NetworkError']) {
   await a.context().close();
 }
 
+// The Stop button stays put when a three-line message shows mid-run: it's under the thumb.
+{
+  const p = await phone();
+  await p.click('#go'); await waitingFor(p, '#001');
+  const y = () => p.evaluate(() => document.querySelector('#go').getBoundingClientRect().y);
+  const before = await y();
+  await p.evaluate(() => window.__tap({ fail: 'NotAllowedError' }));
+  await statusIs(p, 'bad');
+  assert.equal(await y(), before, 'the Stop button moved when "That sticker already has something on it" showed');
+  await p.context().close();
+}
+
 // Trouble with the phone isn't blamed on a sticker: NFC not allowed yet, or no NFC reader, stops the run and says
 // so (in Chrome's words: "NFC permission request denied.", "NFC is not supported."). A tag Chrome can't write
 // ("This tag is not supported.") only asks for another one.

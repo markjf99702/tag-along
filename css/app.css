@@ -71,6 +71,9 @@ button { cursor: pointer; }
 .ghost.small { padding: 4px 10px; font-size: 14px; margin-top: 6px; }
 
 .status { text-align: center; min-height: 3em; margin: 0 0 12px; color: var(--ink2); }
+/* Write mode keeps room for three lines, so Stop doesn't move under the thumb when a longer message shows mid-run;
+   the text sits at the bottom, next to the button it's about */
+#write .status { min-height: 4.5em; display: flex; flex-direction: column; justify-content: flex-end; }
 .status.ok { color: var(--ok); font-weight: 600; }
 .status.bad { color: var(--bad); font-weight: 600; }
 .status.wait { color: var(--wait); font-weight: 600; }

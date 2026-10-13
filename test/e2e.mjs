@@ -160,16 +160,15 @@ for (const fail of [undefined, 'NetworkError']) {
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 
-// Works offline once it has been opened.
+// Works offline once it has been opened. setOffline doesn't reach the service worker's own requests, so the server
+// goes away instead, and the reload has to come from the cache.
 await page.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 10000 }).catch(() => {});
 assert.equal(await page.evaluate(() => caches.has('name-tag-v3')), true, "the service worker deleted another tool's offline copy");
 assert.equal(await page.evaluate(() => caches.has('tag-along-v0')), false, 'the service worker kept an old copy of this one');
-await ctx.setOffline(true);
+await new Promise(done => { server.closeAllConnections(); server.close(done); });
 await page.reload();
-assert.ok(await page.title(), 'the page did not load offline');
-await ctx.setOffline(false);
+assert.equal(await page.textContent('#num'), '#050', 'the page did not load offline');
 
 assert.deepEqual(problems.filter(p => !p.startsWith('failed:')), [], 'problems while using it');
 await browser.close();
-server.close();
 console.log('all good');

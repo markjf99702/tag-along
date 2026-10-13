@@ -176,7 +176,9 @@ async function startChecking() {
     if (d.number != null) {
       const big = document.createElement('div'); big.className = 'big'; big.textContent = '#' + pad(d.number, settings.digits); out.append(big);
       const p = document.createElement('p');
-      p.textContent = d.number < settings.next ? 'Already written (it\'s before your next number).' : 'Written with your link, but ahead of your next number.';
+      p.textContent = d.number < settings.next ? 'Already written (it\'s before your next number).'
+        : d.number === settings.next ? 'Written with your link, and it\'s your next number.'
+        : 'Written with your link, but ahead of your next number.';
       out.append(p);
     }
     for (const line of d.lines) { const p = document.createElement('p'); const c = document.createElement('code'); c.textContent = line; p.append(c); out.append(p); }

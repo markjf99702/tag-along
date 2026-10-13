@@ -295,6 +295,19 @@ for (const fail of [undefined, 'NetworkError']) {
 }
 
 
+// Check says where a tag's number stands against your next number, including when it is your next number.
+{
+  const p = await phone();
+  await p.evaluate(() => localStorage.setItem('tagalong.v1', JSON.stringify({ next: 12 })));
+  await p.reload(); await p.click('#tab-check'); await p.click('#check-go');
+  await p.waitForFunction(() => window.__nfc.scans.length > 0);
+  const read = async n => { await p.evaluate(n => window.__read([['url', 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/' + n]]), n); return p.textContent('#readout p'); };
+  assert.equal(await read('011'), 'Already written (it\'s before your next number).');
+  assert.equal(await read('012'), 'Written with your link, and it\'s your next number.');
+  assert.equal(await read('013'), 'Written with your link, but ahead of your next number.');
+  await p.context().close();
+}
+
 // Keyboard focus on the Write and Check a tag tabs shows in full: the tab bar clips anything drawn outside a tab.
 {
   const p = await phone();

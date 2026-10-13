@@ -7,7 +7,6 @@ let settings = load();
 const session = []; // {n, skipped}
 let writing = null;  // AbortController while the write loop runs
 let checking = null; // AbortController while Check mode is listening
-let wake = null;
 
 // ---------------------------------------------------------------- storage
 function load() {
@@ -55,16 +54,24 @@ function flash(cls) {
   setTimeout(() => t.classList.remove(cls), 600);
 }
 const buzz = p => { try { navigator.vibrate?.(p); } catch {} };
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+// A pause that Stop cuts short.
+function pause(ms, signal) {
+  return new Promise(done => {
+    const end = () => { clearTimeout(timer); signal.removeEventListener('abort', end); done(); };
+    const timer = setTimeout(end, ms);
+    signal.addEventListener('abort', end);
+  });
+}
 
 // ---------------------------------------------------------------- writing
 async function startWriting() {
   if (supportProblem()) return;
   stopChecking();
-  writing = new AbortController();
-  const { signal } = writing;
+  const run = writing = new AbortController();
+  const { signal } = run;
   render();
-  try { wake = await navigator.wakeLock?.request('screen'); } catch { wake = null; }
+  let wake = null;
+  try { wake = await navigator.wakeLock?.request('screen'); } catch {}
   const ndef = new NDEFReader();
   let justWrote = 0;
   while (!signal.aborted) {
@@ -78,17 +85,20 @@ async function startWriting() {
       justWrote = Date.now();
       buzz(70); flash('done'); render();
       status('status', `#${pad(n, settings.digits)} written. Mark the bag, then take the sticker away from the phone.`, 'ok');
-      await sleep(1600); // time to pull the tag away before the next write starts
+      await pause(1600, signal); // time to pull the tag away before the next write starts
     } catch (e) {
       if (signal.aborted || e.name === 'AbortError') break;
       const msg = await explain(e, Date.now() - justWrote < 4000);
+      if (signal.aborted) break;
       if (msg.fatal) { status('status', msg.text, 'bad'); break; }
       buzz([40, 60, 40]); flash('err');
       status('status', msg.text, 'bad');
-      await sleep(1800);
+      await pause(1800, signal);
     }
   }
-  stopWriting(false);
+  try { wake?.release(); } catch {}
+  // Stop then Start straight away can leave this run winding down after the new one began: leave that one be.
+  if (writing === run) stopWriting(false);
 }
 
 async function explain(e, rightAfterWrite) {
@@ -109,7 +119,6 @@ async function explain(e, rightAfterWrite) {
 function stopWriting(abort = true) {
   if (abort) writing?.abort();
   writing = null;
-  try { wake?.release(); } catch {} wake = null;
   if (!$('status').classList.contains('bad')) status('status', session.length ? `Stopped. Next up is #${pad(settings.next, settings.digits)}.` : 'Press Start, then hold a blank sticker to the back of the phone.');
   render();
 }

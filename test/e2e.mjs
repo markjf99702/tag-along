@@ -26,20 +26,61 @@ const base = `http://localhost:${server.address().port}/`;
 const browser = await pw.chromium.launch();
 const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true });
 
-// A pretend NFC reader: each write() waits for window.__tap(), which plays a sticker touching the phone.
-await ctx.addInitScript(() => {
-  window.__written = [];
-  let pending = null;
-  window.__tap = (opts = {}) => { const p = pending; pending = null; if (!p) return false; if (opts.fail) p.reject(Object.assign(new Error('Tag already has data'), { name: 'NotAllowedError' })); else { window.__written.push(p.msg.records[0].data); p.resolve(); } return true; };
-  window.NDEFReader = class { async write(msg, o = {}) { return new Promise((resolve, reject) => { pending = { msg, resolve, reject }; o.signal?.addEventListener('abort', () => reject(new DOMException('stopped', 'AbortError'))); }); } async scan() {} };
-  navigator.vibrate = () => true;
-});
-const page = await ctx.newPage();
+// A pretend NFC reader that behaves like Chrome's. write() waits for window.__tap(), which plays a sticker touching
+// the phone (__tap({ fail: 'NotAllowedError', message }) plays one that refuses it); a new write() cancels one still
+// waiting, and an aborted one rejects with the signal's reason. nfc.perm is what permissions.query says about NFC,
+// and nfc.locks counts the screen wake locks held.
+function fakeNfc() {
+  const nfc = window.__nfc = { written: [], pending: [], perm: 'granted', buzzes: 0, locks: 0 };
+  window.NDEFReader = class {
+    write(msg, o = {}) {
+      return new Promise((resolve, reject) => {
+        if (o.signal?.aborted) { reject(o.signal.reason); return; }
+        for (const old of nfc.pending.splice(0)) old.reject(new DOMException('Push is cancelled due to a new push request.', 'AbortError'));
+        const w = { msg, resolve, reject };
+        nfc.pending.push(w);
+        o.signal?.addEventListener('abort', () => { const i = nfc.pending.indexOf(w); if (i >= 0) { nfc.pending.splice(i, 1); reject(o.signal.reason); } });
+      });
+    }
+    async scan() {}
+  };
+  window.__tap = ({ fail, message = 'NDEFWriteOptions#overwrite does not allow overwrite.' } = {}) => {
+    const w = nfc.pending.shift();
+    if (!w) return false;
+    if (fail) w.reject(new DOMException(message, fail));
+    else { nfc.written.push(w.msg.records[0].data); w.resolve(); }
+    return true;
+  };
+  navigator.vibrate = () => { nfc.buzzes++; return true; };
+  Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => {
+    nfc.locks++; let held = true;
+    return { release: async () => { if (held) { held = false; nfc.locks--; } } };
+  } } });
+  const query = navigator.permissions.query.bind(navigator.permissions);
+  navigator.permissions.query = d => (d?.name === 'nfc' ? Promise.resolve({ state: nfc.perm }) : query(d));
+}
+await ctx.addInitScript(fakeNfc);
 const problems = [];
-page.on('pageerror', e => problems.push(e.message));
-page.on('console', m => { if (m.type() === 'error') problems.push(m.text()); });
-page.on('requestfailed', r => problems.push('failed: ' + r.url()));
-page.on('request', r => { if (!r.url().startsWith(base)) problems.push('left the site: ' + r.url()); });
+function watch(p) {
+  p.on('pageerror', e => problems.push(e.message));
+  p.on('console', m => { if (m.type() === 'error') problems.push(m.text()); });
+  p.on('requestfailed', r => problems.push('failed: ' + r.url()));
+  p.on('request', r => { if (!r.url().startsWith(base)) problems.push('left the site: ' + r.url()); });
+}
+const page = await ctx.newPage();
+watch(page);
+
+// A fresh phone for one check: its own storage, the pretend reader, no service worker.
+async function phone() {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+  await c.addInitScript(fakeNfc);
+  const p = await c.newPage();
+  watch(p);
+  await p.goto(base);
+  return p;
+}
+const waitingFor = (p, label) => p.waitForFunction(label => { const s = document.querySelector('#status'); return s.classList.contains('wait') && s.textContent.includes(label); }, label);
+const statusIs = (p, kind) => p.waitForFunction(kind => document.querySelector('#status').classList.contains(kind), kind);
 
 await page.goto(base);
 await page.evaluate(() => document.fonts.ready);
@@ -48,13 +89,13 @@ await page.evaluate(() => document.fonts.ready);
 // Starts at #001 and writes the Stockroom link for it.
 assert.equal(await page.textContent('#num'), '#001');
 await page.click('#go');
-await page.waitForFunction(() => window.__tap && document.querySelector('#status').classList.contains('wait'));
+await waitingFor(page, '#001');
 assert.ok(await page.evaluate(() => window.__tap()));
 await page.waitForFunction(() => document.querySelector('#num').textContent === '#002');
-assert.equal((await page.evaluate(() => window.__written))[0], 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/001');
+assert.equal((await page.evaluate(() => window.__nfc.written))[0], 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/001');
 // The loop waits, then asks for the next sticker; a used sticker is refused and the number doesn't move.
 await page.waitForFunction(() => /#002/.test(document.querySelector('#status').textContent), null, { timeout: 5000 });
-await page.evaluate(() => window.__tap({ fail: true }));
+await page.evaluate(() => window.__tap({ fail: 'NotAllowedError' }));
 await page.waitForFunction(() => document.querySelector('#status').classList.contains('bad'));
 assert.equal(await page.textContent('#num'), '#002');
 await page.waitForFunction(() => /#002/.test(document.querySelector('#status').textContent) && document.querySelector('#status').classList.contains('wait'), null, { timeout: 5000 });
@@ -70,6 +111,23 @@ assert.equal(await page.textContent('#num'), '#004');
 await page.click('.settings summary');
 await page.fill('#next', '50'); await page.dispatchEvent('#next', 'change');
 assert.equal(await page.textContent('#num'), '#050');
+
+// Stop then Start during the pause after a sticker, or after a refusal: still one run, and Stop still stops it.
+for (const fail of [undefined, 'NetworkError']) {
+  const p = await phone();
+  await p.click('#go'); await waitingFor(p, '#001');
+  await p.evaluate(fail => window.__tap({ fail, message: 'Failed to write due to an IO error: x' }), fail);
+  await statusIs(p, fail ? 'bad' : 'ok');
+  await p.click('#go'); await p.click('#go');
+  await p.waitForTimeout(2500); // longer than either pause
+  assert.equal(await p.textContent('#go'), 'Stop', 'Start after Stop was undone by the run before it');
+  await waitingFor(p, fail ? '#001' : '#002');
+  assert.equal(await p.evaluate(() => window.__nfc.pending.length), 1);
+  await p.click('#go');
+  assert.equal(await p.evaluate(() => window.__tap()), false, 'a write was still waiting after Stop');
+  await p.waitForFunction(() => window.__nfc.locks === 0, null, { timeout: 3000 }).catch(() => assert.fail('the screen was kept awake after Stop'));
+  await p.context().close();
+}
 
 
 // Fits a phone: nothing scrolls sideways.

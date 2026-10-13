@@ -201,6 +201,8 @@ $('digits').onchange = e => { settings = clean({ ...settings, digits: e.target.v
 $('prefix').onchange = e => { settings = clean({ ...settings, prefix: e.target.value.trim() }); changed(); };
 $('reset-prefix').onclick = () => { settings = clean({ ...settings, prefix: STOCKROOM }); changed(); };
 $('protect').onchange = e => { settings = clean({ ...settings, protect: e.target.checked }); changed(); };
+// Another tab wrote stickers or changed a setting: show the same here, so this tab doesn't write those numbers again.
+addEventListener('storage', e => { if (e.key === KEY || e.key === null) { settings = load(); render(); waiting?.abort(); } });
 document.addEventListener('visibilitychange', () => {
   // Chrome stops NFC in a background tab; say so rather than look stuck
   if (document.hidden && writing) stopWriting();

@@ -181,6 +181,22 @@ for (const fail of [undefined, 'NetworkError']) {
   await p.context().close();
 }
 
+// Two tabs: numbers written in one move the other on, even while it waits for a sticker.
+{
+  const a = await phone();
+  const b = await a.context().newPage(); watch(b); await b.goto(base);
+  const tap = async p => { await p.evaluate(() => window.__tap()); await statusIs(p, 'ok'); };
+  await b.click('#go');
+  for (const n of ['#001', '#002', '#003']) { await waitingFor(b, n); await tap(b); }
+  await b.click('#go');
+  await a.waitForFunction(() => document.querySelector('#num').textContent === '#004', null, { timeout: 5000 }).catch(() => assert.fail('the other tab still shows its old number'));
+  await a.click('#go'); await waitingFor(a, '#004');
+  await b.click('.settings summary'); await b.fill('#next', '50'); await b.dispatchEvent('#next', 'change');
+  await waitingFor(a, '#050'); await tap(a);
+  assert.deepEqual(await a.evaluate(() => window.__nfc.written.map(u => u.slice(-3))), ['050']);
+  await a.context().close();
+}
+
 
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');

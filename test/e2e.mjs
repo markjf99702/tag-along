@@ -28,14 +28,16 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 
 // A pretend NFC reader that behaves like Chrome's. write() waits for window.__tap(), which plays a sticker touching
 // the phone (__tap({ fail: 'NotAllowedError', message }) plays one that refuses it); a new write() cancels one still
-// waiting, and an aborted one rejects with the signal's reason. nfc.perm is what permissions.query says about NFC,
-// and nfc.locks counts the screen wake locks held.
+// waiting, and an aborted one rejects with the signal's reason. nfc.writeError ([name, message]) makes every write
+// fail at once, as on a phone without NFC. nfc.perm is what permissions.query says about NFC, and nfc.locks counts
+// the screen wake locks held.
 function fakeNfc() {
-  const nfc = window.__nfc = { written: [], pending: [], perm: 'granted', buzzes: 0, locks: 0 };
+  const nfc = window.__nfc = { written: [], pending: [], writeError: null, perm: 'granted', buzzes: 0, locks: 0 };
   window.NDEFReader = class {
     write(msg, o = {}) {
       return new Promise((resolve, reject) => {
         if (o.signal?.aborted) { reject(o.signal.reason); return; }
+        if (nfc.writeError) { reject(new DOMException(nfc.writeError[1], nfc.writeError[0])); return; }
         for (const old of nfc.pending.splice(0)) old.reject(new DOMException('Push is cancelled due to a new push request.', 'AbortError'));
         const w = { msg, resolve, reject };
         nfc.pending.push(w);
@@ -195,6 +197,32 @@ for (const fail of [undefined, 'NetworkError']) {
   await waitingFor(a, '#050'); await tap(a);
   assert.deepEqual(await a.evaluate(() => window.__nfc.written.map(u => u.slice(-3))), ['050']);
   await a.context().close();
+}
+
+// Trouble with the phone isn't blamed on a sticker: NFC not allowed yet, or no NFC reader, stops the run and says
+// so (in Chrome's words: "NFC permission request denied.", "NFC is not supported."). A tag Chrome can't write
+// ("This tag is not supported.") only asks for another one.
+{
+  const p = await phone();
+  await p.evaluate(() => { window.__nfc.perm = 'prompt'; });
+  await p.click('#go'); await waitingFor(p, '#001');
+  await p.evaluate(() => window.__tap({ fail: 'NotAllowedError', message: 'NFC permission request denied.' }));
+  await statusIs(p, 'bad');
+  assert.equal(await p.textContent('#status'), 'NFC isn\'t allowed for this site yet. Press Start and allow it when Chrome asks.');
+  assert.equal(await p.textContent('#go'), 'Start');
+  await p.evaluate(() => { window.__nfc.perm = 'granted'; window.__nfc.writeError = ['NotSupportedError', 'NFC is not supported.']; });
+  await p.click('#go'); await statusIs(p, 'bad');
+  await p.waitForTimeout(2200);
+  assert.equal(await p.textContent('#status'), 'Chrome can\'t find an NFC reader on this phone, so it can\'t write tags.');
+  assert.equal(await p.textContent('#go'), 'Start');
+  assert.equal(await p.evaluate(() => window.__nfc.buzzes), 0, 'it buzzed with no sticker near');
+  await p.evaluate(() => { window.__nfc.writeError = null; });
+  await p.click('#go'); await waitingFor(p, '#001');
+  await p.evaluate(() => window.__tap({ fail: 'NotSupportedError', message: 'This tag is not supported.' }));
+  await statusIs(p, 'bad');
+  assert.match(await p.textContent('#status'), /^That tag isn't one Chrome can write/);
+  await waitingFor(p, '#001');
+  await p.context().close();
 }
 
 

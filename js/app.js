@@ -126,6 +126,10 @@ async function explain(e, rightAfterWrite) {
   try { perm = (await navigator.permissions.query({ name: 'nfc' })).state; } catch {}
   if (perm === 'denied') return { fatal: true, text: 'NFC is blocked for this site. Allow it in Chrome: the icon left of the address → Permissions → NFC.' };
   if (e.name === 'NotAllowedError' && /activation|gesture/i.test(e.message)) return { fatal: true, text: 'Chrome wants a fresh tap before writing. Press Start again.' };
+  // The phone, not the sticker. Chrome says "NFC permission request denied." when NFC hasn't been allowed (its
+  // question was closed), and "NFC is not supported." when there's no NFC reader ("This tag is not supported." is a tag).
+  if (e.name === 'NotAllowedError' && /permission/i.test(e.message)) return { fatal: true, text: 'NFC isn\'t allowed for this site yet. Press Start and allow it when Chrome asks.' };
+  if (e.name === 'NotSupportedError' && /NFC is not supported|unavailable/i.test(e.message)) return { fatal: true, text: 'Chrome can\'t find an NFC reader on this phone, so it can\'t write tags.' };
   if (e.name === 'NotAllowedError' && settings.protect) {
     return rightAfterWrite
       ? { text: 'That\'s the sticker just written. Take it away from the phone, then hold the next one.' }

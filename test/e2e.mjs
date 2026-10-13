@@ -79,7 +79,7 @@ async function phone() {
   await p.goto(base);
   return p;
 }
-const waitingFor = (p, label) => p.waitForFunction(label => { const s = document.querySelector('#status'); return s.classList.contains('wait') && s.textContent.includes(label); }, label);
+const waitingFor = (p, label) => p.waitForFunction(label => { const s = document.querySelector('#status'); return s.classList.contains('wait') && s.textContent.includes(label); }, label, { timeout: 8000 });
 const statusIs = (p, kind) => p.waitForFunction(kind => document.querySelector('#status').classList.contains(kind), kind);
 
 await page.goto(base);
@@ -126,6 +126,26 @@ for (const fail of [undefined, 'NetworkError']) {
   await p.click('#go');
   assert.equal(await p.evaluate(() => window.__tap()), false, 'a write was still waiting after Stop');
   await p.waitForFunction(() => window.__nfc.locks === 0, null, { timeout: 3000 }).catch(() => assert.fail('the screen was kept awake after Stop'));
+  await p.context().close();
+}
+
+// Skip, − 1, a new Next number or a new link while it waits for a sticker: that sticker gets them.
+{
+  const p = await phone();
+  const tap = async () => { await p.evaluate(() => window.__tap()); await statusIs(p, 'ok'); };
+  await p.click('#go'); await waitingFor(p, '#001');
+  await p.click('#skip'); await waitingFor(p, '#002'); await tap();
+  await waitingFor(p, '#003');
+  await p.click('#back'); await waitingFor(p, '#002'); await tap();
+  await waitingFor(p, '#003');
+  await p.click('.settings summary');
+  await p.fill('#next', '50'); await p.dispatchEvent('#next', 'change'); await waitingFor(p, '#050'); await tap();
+  await waitingFor(p, '#051');
+  await p.fill('#prefix', 'https://example.com/b/'); await p.dispatchEvent('#prefix', 'change');
+  await p.waitForFunction(() => window.__nfc.pending[0]?.msg.records[0].data.startsWith('https://example.com/b/'), null, { timeout: 8000 });
+  await tap();
+  assert.deepEqual((await p.evaluate(() => window.__nfc.written)).map(u => u.replace(/^.*#bag\//, '')), ['002', '002', '050', 'https://example.com/b/051']);
+  assert.equal(await p.textContent('#num'), '#052');
   await p.context().close();
 }
 

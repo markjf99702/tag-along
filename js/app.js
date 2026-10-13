@@ -6,6 +6,7 @@ const $ = id => document.getElementById(id);
 let settings = load();
 const session = []; // {n, skipped}
 let writing = null;  // AbortController while the write loop runs
+let waiting = null;  // AbortController for the write waiting for a sticker; changed() calls it back
 let checking = null; // AbortController while Check mode is listening
 
 // ---------------------------------------------------------------- storage
@@ -78,8 +79,7 @@ async function startWriting() {
     const n = settings.next;
     status('status', `Hold a blank sticker to the back of the phone for #${pad(n, settings.digits)}.`, 'wait');
     try {
-      await ndef.write({ records: [{ recordType: 'url', data: urlFor(n, settings) }] },
-        { overwrite: !settings.protect, signal });
+      if (!await writeTag(ndef, n, signal)) continue; // the number or the link changed while it waited: ask again
       session.push({ n });
       settings.next = n + 1; save();
       justWrote = Date.now();
@@ -99,6 +99,24 @@ async function startWriting() {
   try { wake?.release(); } catch {}
   // Stop then Start straight away can leave this run winding down after the new one began: leave that one be.
   if (writing === run) stopWriting(false);
+}
+
+// Writes number n. Stop ends it; a new number or link calls it back first (changed()), and then it returns false.
+async function writeTag(ndef, n, signal) {
+  const attempt = waiting = new AbortController();
+  const stop = () => attempt.abort();
+  signal.addEventListener('abort', stop);
+  try {
+    await ndef.write({ records: [{ recordType: 'url', data: urlFor(n, settings) }] },
+      { overwrite: !settings.protect, signal: attempt.signal });
+    return true;
+  } catch (e) {
+    if (attempt.signal.aborted && !signal.aborted) return false;
+    throw e;
+  } finally {
+    signal.removeEventListener('abort', stop);
+    if (waiting === attempt) waiting = null;
+  }
 }
 
 async function explain(e, rightAfterWrite) {
@@ -172,13 +190,15 @@ $('tab-check').onclick = () => setMode('check');
 
 $('go').onclick = () => (writing ? stopWriting() : startWriting());
 $('check-go').onclick = () => (checking ? stopChecking() : startChecking());
-$('skip').onclick = () => { session.push({ n: settings.next, skipped: true }); settings.next += 1; save(); render(); };
-$('back').onclick = () => { settings.next = Math.max(0, settings.next - 1); save(); render(); };
-$('next').onchange = e => { settings = clean({ ...settings, next: e.target.value }); save(); render(); };
-$('digits').onchange = e => { settings = clean({ ...settings, digits: e.target.value }); save(); render(); };
-$('prefix').onchange = e => { settings = clean({ ...settings, prefix: e.target.value.trim() }); save(); render(); };
-$('reset-prefix').onclick = () => { settings = clean({ ...settings, prefix: STOCKROOM }); save(); render(); };
-$('protect').onchange = e => { settings = clean({ ...settings, protect: e.target.checked }); save(); render(); };
+// Keeps and shows new settings. A sticker being waited for gets them too: its write starts again with them.
+function changed() { save(); render(); waiting?.abort(); }
+$('skip').onclick = () => { session.push({ n: settings.next, skipped: true }); settings.next += 1; changed(); };
+$('back').onclick = () => { settings.next = Math.max(0, settings.next - 1); changed(); };
+$('next').onchange = e => { settings = clean({ ...settings, next: e.target.value }); changed(); };
+$('digits').onchange = e => { settings = clean({ ...settings, digits: e.target.value }); changed(); };
+$('prefix').onchange = e => { settings = clean({ ...settings, prefix: e.target.value.trim() }); changed(); };
+$('reset-prefix').onclick = () => { settings = clean({ ...settings, prefix: STOCKROOM }); changed(); };
+$('protect').onchange = e => { settings = clean({ ...settings, protect: e.target.checked }); changed(); };
 document.addEventListener('visibilitychange', () => {
   // Chrome stops NFC in a background tab; say so rather than look stuck
   if (document.hidden && writing) stopWriting();

@@ -40,6 +40,7 @@ button { cursor: pointer; }
 .modes { display: flex; border: 2px solid var(--ink); border-radius: 8px; overflow: hidden; margin-bottom: 22px; }
 .modes button { flex: 1; border: 0; background: transparent; padding: 10px 8px; font-weight: 600; color: var(--ink2); }
 .modes button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.modes button:focus-visible { outline-offset: -5px; } /* inside the tab: the bar clips anything outside it */
 
 .unsupported { background: var(--bad-soft); color: var(--bad); border-radius: 8px; padding: 12px 14px; margin: 0 0 18px; }
 

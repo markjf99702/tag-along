@@ -281,6 +281,17 @@ for (const fail of [undefined, 'NetworkError']) {
 }
 
 
+// Keyboard focus on the Write and Check a tag tabs shows in full: the tab bar clips anything drawn outside a tab.
+{
+  const p = await phone();
+  for (const id of ['tab-write', 'tab-check']) {
+    await p.keyboard.press('Tab');
+    const ring = await p.evaluate(() => { const e = document.activeElement, s = getComputedStyle(e); return { id: e.id, inside: e.matches(':focus-visible') && parseFloat(s.outlineOffset) + parseFloat(s.outlineWidth) <= 0 }; });
+    assert.deepEqual(ring, { id, inside: true }, `the focus ring on #${id} is cut off`);
+  }
+  await p.context().close();
+}
+
 // Screen readers hear the status lines and what Check reads off a tag.
 for (const id of ['status', 'check-status', 'readout']) assert.equal(await page.getAttribute('#' + id, 'role'), 'status', `#${id} isn't announced`);
 

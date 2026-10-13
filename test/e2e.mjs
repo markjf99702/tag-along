@@ -82,6 +82,13 @@ async function phone() {
 const waitingFor = (p, label) => p.waitForFunction(label => { const s = document.querySelector('#status'); return s.classList.contains('wait') && s.textContent.includes(label); }, label, { timeout: 8000 });
 const statusIs = (p, kind) => p.waitForFunction(kind => document.querySelector('#status').classList.contains(kind), kind);
 
+// Other tools on junkdrawer.works share this address's caches. Make one, and an old one of this tool's, before
+// the service worker first starts: it should clear out only its own.
+const other = await ctx.newPage();
+await other.goto(base + 'another-tool/');
+await other.evaluate(async () => { await caches.open('name-tag-v3'); await caches.open('tag-along-v0'); });
+await other.close();
+
 await page.goto(base);
 await page.evaluate(() => document.fonts.ready);
 
@@ -155,6 +162,8 @@ assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= i
 
 // Works offline once it has been opened.
 await page.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 10000 }).catch(() => {});
+assert.equal(await page.evaluate(() => caches.has('name-tag-v3')), true, "the service worker deleted another tool's offline copy");
+assert.equal(await page.evaluate(() => caches.has('tag-along-v0')), false, 'the service worker kept an old copy of this one');
 await ctx.setOffline(true);
 await page.reload();
 assert.ok(await page.title(), 'the page did not load offline');

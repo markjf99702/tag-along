@@ -2,7 +2,7 @@
 // Anything the person saves lives in localStorage, not here.
 // Network first, so a new version shows up as soon as you're online.
 
-const CACHE = 'tag-along-v1'; // bump the number when the file list changes
+const CACHE = 'tag-along-v2'; // bump the number when the file list changes
 const SHELL = [
   './', 'index.html', 'icon.svg', 'manifest.webmanifest',
   'css/app.css', 'js/app.js', 'js/tags.js',
@@ -13,9 +13,10 @@ self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
 });
 
+// Every tool at junkdrawer.works/REPO/ shares this address's caches, so clear out only this tool's old ones.
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k.startsWith('tag-along-') && k !== CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 

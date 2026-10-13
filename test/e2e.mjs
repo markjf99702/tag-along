@@ -28,12 +28,13 @@ const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, de
 
 // A pretend NFC reader that behaves like Chrome's. write() waits for window.__tap(), which plays a sticker touching
 // the phone (__tap({ fail: 'NotAllowedError', message }) plays one that refuses it); a new write() cancels one still
-// waiting, and an aborted one rejects with the signal's reason. nfc.writeError ([name, message]) makes every write
-// fail at once, as on a phone without NFC. scan() starts listening after nfc.scanDelay ms, or fails with
-// nfc.scanError, and __read([[recordType, text], ...]) plays a tag for it. nfc.perm is what permissions.query says
-// about NFC, and nfc.locks counts the screen wake locks held.
+// waiting, and an aborted one rejects with the signal's reason (nfc.abortDelay ms later, as Chrome's answer comes
+// back from its NFC service). nfc.writeError ([name, message]) makes every write fail at once, as on a phone without
+// NFC. scan() starts listening after nfc.scanDelay ms, or fails with nfc.scanError, and
+// __read([[recordType, text], ...]) plays a tag for it. nfc.perm is what permissions.query says about NFC, and
+// nfc.locks counts the screen wake locks held.
 function fakeNfc() {
-  const nfc = window.__nfc = { written: [], pending: [], writeError: null, scans: [], scanError: null, scanDelay: 0, perm: 'granted', buzzes: 0, locks: 0 };
+  const nfc = window.__nfc = { written: [], pending: [], writeError: null, abortDelay: 0, scans: [], scanError: null, scanDelay: 0, perm: 'granted', buzzes: 0, locks: 0 };
   window.NDEFReader = class {
     write(msg, o = {}) {
       return new Promise((resolve, reject) => {
@@ -42,7 +43,12 @@ function fakeNfc() {
         for (const old of nfc.pending.splice(0)) old.reject(new DOMException('Push is cancelled due to a new push request.', 'AbortError'));
         const w = { msg, resolve, reject };
         nfc.pending.push(w);
-        o.signal?.addEventListener('abort', () => { const i = nfc.pending.indexOf(w); if (i >= 0) { nfc.pending.splice(i, 1); reject(o.signal.reason); } });
+        o.signal?.addEventListener('abort', () => {
+          const i = nfc.pending.indexOf(w); if (i < 0) return;
+          nfc.pending.splice(i, 1);
+          const answer = () => reject(o.signal.reason);
+          if (nfc.abortDelay) setTimeout(answer, nfc.abortDelay); else answer();
+        });
       });
     }
     scan(o = {}) {
@@ -146,6 +152,22 @@ for (const fail of [undefined, 'NetworkError']) {
   assert.equal(await p.textContent('#go'), 'Stop', 'Start after Stop was undone by the run before it');
   await waitingFor(p, fail ? '#001' : '#002');
   assert.equal(await p.evaluate(() => window.__nfc.pending.length), 1);
+  await p.click('#go');
+  assert.equal(await p.evaluate(() => window.__tap()), false, 'a write was still waiting after Stop');
+  await p.waitForFunction(() => window.__nfc.locks === 0, null, { timeout: 3000 }).catch(() => assert.fail('the screen was kept awake after Stop'));
+  await p.context().close();
+}
+
+// Stop then Start in one go (a double tap) while it waits for a sticker. Chrome answers the cancelled write a moment
+// later, once the new run has begun, and that answer mustn't end the new run.
+{
+  const p = await phone();
+  await p.evaluate(() => { window.__nfc.abortDelay = 300; });
+  await p.click('#go'); await waitingFor(p, '#001');
+  await p.evaluate(() => { const go = document.querySelector('#go'); go.click(); go.click(); });
+  await p.waitForTimeout(1000); // the cancelled write has had its answer
+  assert.equal(await p.textContent('#go'), 'Stop', 'the answer to the cancelled write ended the run after it');
+  assert.deepEqual(await p.evaluate(() => [window.__nfc.pending.length, window.__nfc.locks]), [1, 1], 'one write waiting, one wake lock');
   await p.click('#go');
   assert.equal(await p.evaluate(() => window.__tap()), false, 'a write was still waiting after Stop');
   await p.waitForFunction(() => window.__nfc.locks === 0, null, { timeout: 3000 }).catch(() => assert.fail('the screen was kept awake after Stop'));

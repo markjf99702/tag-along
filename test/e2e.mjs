@@ -156,6 +156,16 @@ for (const fail of [undefined, 'NetworkError']) {
   await p.context().close();
 }
 
+// Settings: Next number and Digits side by side, and the link box as wide as the panel.
+{
+  const p = await phone();
+  await p.click('.settings summary');
+  const [next, digits, prefix, panel] = await Promise.all(['#next', '#digits', '#prefix', '.settings'].map(s => p.locator(s).boundingBox()));
+  assert.ok(Math.abs(next.y - digits.y) < 2 && digits.x > next.x + next.width, 'Next number and Digits are not side by side');
+  assert.ok(prefix.width > panel.width * 0.85, 'the link box is narrower than the settings panel');
+  await p.context().close();
+}
+
 
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');

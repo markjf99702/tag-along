@@ -70,7 +70,6 @@ assert.equal(await page.textContent('#num'), '#004');
 await page.click('.settings summary');
 await page.fill('#next', '50'); await page.dispatchEvent('#next', 'change');
 assert.equal(await page.textContent('#num'), '#050');
-await page.screenshot({ path: 'docs/phone-write.png' });
 
 
 // Fits a phone: nothing scrolls sideways.

@@ -1,4 +1,4 @@
-import { DEFAULTS, STOCKROOM, pad, urlFor, clean, describe } from './tags.js';
+import { DEFAULTS, STOCKROOM, pad, urlFor, clean, describe, linkFrom } from './tags.js';
 
 const KEY = 'tagalong.v1';
 const $ = id => document.getElementById(id);
@@ -209,8 +209,13 @@ $('skip').onclick = () => { session.push({ n: settings.next, skipped: true }); s
 $('back').onclick = () => { settings.next = Math.max(0, settings.next - 1); changed(); };
 $('next').onchange = e => { settings = clean({ ...settings, next: e.target.value }); changed(); };
 $('digits').onchange = e => { settings = clean({ ...settings, digits: e.target.value }); changed(); };
-$('prefix').onchange = e => { settings = clean({ ...settings, prefix: e.target.value.trim() }); changed(); };
-$('reset-prefix').onclick = () => { settings = clean({ ...settings, prefix: STOCKROOM }); changed(); };
+$('prefix').onchange = e => {
+  // Something that isn't a link keeps the link there was, and says why; an emptied box just gets it back.
+  const text = e.target.value.trim(), link = text && linkFrom(text);
+  $('prefix-note').textContent = text && !link ? 'That isn\'t a link, so it wasn\'t saved. Links start with https:// and have no spaces.' : '';
+  if (link) { settings = clean({ ...settings, prefix: link }); changed(); } else render();
+};
+$('reset-prefix').onclick = () => { $('prefix-note').textContent = ''; settings = clean({ ...settings, prefix: STOCKROOM }); changed(); };
 $('protect').onchange = e => { settings = clean({ ...settings, protect: e.target.checked }); changed(); };
 // Another tab wrote stickers or changed a setting: show the same here, so this tab doesn't write those numbers again.
 addEventListener('storage', e => { if (e.key === KEY || e.key === null) { settings = load(); render(); waiting?.abort(); } });

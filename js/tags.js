@@ -24,6 +24,15 @@ export function numberIn(url, { prefix }) {
   return /^\d{1,6}$/.test(rest) ? Number(rest) : null;
 }
 
+// A link typed into the settings, tidied: an address without https:// gets it, and HTTPS:// is fine too.
+// Null if it still isn't a web link.
+export function linkFrom(text) {
+  let link = String(text ?? '').trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(link)) link = 'https://' + link.replace(/^\/+/, '');
+  link = link.replace(/^https?:/i, s => s.toLowerCase());
+  return /^https?:\/\/\S+$/.test(link) ? link : null;
+}
+
 // Settings arrive from localStorage, which anyone can edit: keep them sane.
 export function clean(s) {
   const out = { ...DEFAULTS, ...(s && typeof s === 'object' ? s : {}) };

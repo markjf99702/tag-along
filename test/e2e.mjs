@@ -239,6 +239,20 @@ for (const fail of [undefined, 'NetworkError']) {
   await p.context().close();
 }
 
+// The link setting: a bare address gets https://, and something that isn't a link keeps the link it had and says why.
+{
+  const p = await phone();
+  await p.click('.settings summary');
+  const setLink = async text => { await p.fill('#prefix', text); await p.dispatchEvent('#prefix', 'change'); return [await p.inputValue('#prefix'), await p.textContent('#prefix-note')]; };
+  assert.deepEqual(await setLink('parts-bin.junkdrawer.works/#bag/'), ['https://parts-bin.junkdrawer.works/#bag/', '']);
+  assert.equal(await p.textContent('#example'), 'https://parts-bin.junkdrawer.works/#bag/001');
+  assert.deepEqual(await setLink('https://example.com/my bags/'), ['https://parts-bin.junkdrawer.works/#bag/', 'That isn\'t a link, so it wasn\'t saved. Links start with https:// and have no spaces.']);
+  assert.deepEqual(await setLink(''), ['https://parts-bin.junkdrawer.works/#bag/', '']);
+  await p.reload();
+  assert.equal(await p.textContent('#example'), 'https://parts-bin.junkdrawer.works/#bag/001');
+  await p.context().close();
+}
+
 // Check mode has its own words when listening can't start (no stickers, press Check), and a second tap on Check
 // while it starts just stops it.
 {

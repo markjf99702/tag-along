@@ -90,6 +90,8 @@ button { cursor: pointer; }
 .field label { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink3); font-weight: 600; }
 .field input, .field select { background: var(--bg); border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 10px; width: 100%; min-width: 0; }
 .field input[type="url"] { font: 500 13px var(--mono); }
+.note { margin: 0; font-size: 13px; color: var(--bad); }
+.note:empty { display: none; }
 .wide { grid-column: 1 / -1; }
 .check { display: flex; gap: 8px; align-items: flex-start; font-size: 15px; }
 .check input { width: 18px; height: 18px; margin-top: 3px; accent-color: var(--ink); }

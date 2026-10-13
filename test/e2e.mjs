@@ -281,6 +281,9 @@ for (const fail of [undefined, 'NetworkError']) {
 }
 
 
+// Screen readers hear the status lines and what Check reads off a tag.
+for (const id of ['status', 'check-status', 'readout']) assert.equal(await page.getAttribute('#' + id, 'role'), 'status', `#${id} isn't announced`);
+
 // Fits a phone: nothing scrolls sideways.
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'the page scrolls sideways on a phone');
 

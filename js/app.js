@@ -207,7 +207,11 @@ $('check-go').onclick = () => (checking ? stopChecking() : startChecking());
 function changed() { save(); render(); waiting?.abort(); }
 $('skip').onclick = () => { session.push({ n: settings.next, skipped: true }); settings.next += 1; changed(); };
 $('back').onclick = () => { settings.next = Math.max(0, settings.next - 1); changed(); };
-$('next').onchange = e => { settings = clean({ ...settings, next: e.target.value }); changed(); };
+$('next').onchange = e => {
+  const text = e.target.value.trim();
+  if (text === '' || !(Number(text) >= 0)) { render(); return; } // an emptied box, or below 0, keeps the number there was
+  settings = clean({ ...settings, next: text }); changed();
+};
 $('digits').onchange = e => { settings = clean({ ...settings, digits: e.target.value }); changed(); };
 $('prefix').onchange = e => {
   // Something that isn't a link keeps the link there was, and says why; an emptied box just gets it back.

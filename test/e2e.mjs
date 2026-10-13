@@ -239,6 +239,20 @@ for (const fail of [undefined, 'NetworkError']) {
   await p.context().close();
 }
 
+// Next number: clearing the box, or a number below 0, keeps the number there was rather than making it #000.
+{
+  const p = await phone();
+  await p.click('.settings summary');
+  await p.fill('#next', '20'); await p.dispatchEvent('#next', 'change');
+  for (const text of ['', '-5']) {
+    await p.fill('#next', text); await p.dispatchEvent('#next', 'change');
+    assert.deepEqual([await p.textContent('#num'), await p.inputValue('#next')], ['#020', '20'], `Next number "${text}"`);
+  }
+  await p.reload();
+  assert.equal(await p.textContent('#num'), '#020');
+  await p.context().close();
+}
+
 // The link setting: a bare address gets https://, and something that isn't a link keeps the link it had and says why.
 {
   const p = await phone();

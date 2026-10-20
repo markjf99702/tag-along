@@ -14,10 +14,12 @@ let pw;
 try { pw = require('playwright'); } catch { pw = require(join(execSync('npm root -g').toString().trim(), 'playwright')); }
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json', '.json': 'application/json' };
+let swUpdate = ''; // added to the end of sw.js, which makes the browser install it again as an update
 const server = createServer(async (req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   let body;
   try { body = await readFile(join(root, path === '/' ? 'index.html' : path)); } catch { res.writeHead(404); res.end(); return; }
+  if (path === '/sw.js') body = Buffer.concat([body, Buffer.from(swUpdate)]);
   res.writeHead(200, { 'content-type': TYPES[extname(path)] || 'text/html' });
   res.end(body);
 }).listen(0);
@@ -104,11 +106,11 @@ async function phone(options = {}) {
 const waitingFor = (p, label) => p.waitForFunction(label => { const s = document.querySelector('#status'); return s.classList.contains('wait') && s.textContent.includes(label); }, label, { timeout: 8000 });
 const statusIs = (p, kind) => p.waitForFunction(kind => document.querySelector('#status').classList.contains(kind), kind);
 
-// Other tools on junkdrawer.works share this address's caches. Make one, and an old one of this tool's, before
-// the service worker first starts: it should clear out only its own.
+// Other tools on junkdrawer.works share this address's caches. Make two, one for a tool whose name starts with this
+// one's, and an old one of this tool's, before the service worker first starts: it should clear out only its own.
 const other = await ctx.newPage();
 await other.goto(base + 'another-tool/');
-await other.evaluate(async () => { await caches.open('name-tag-v3'); await caches.open('tag-along-v0'); });
+await other.evaluate(async () => { for (const name of ['name-tag-v3', 'tag-along-x-v1', 'tag-along-v0']) await caches.open(name); });
 await other.close();
 
 await page.goto(base);
@@ -410,8 +412,23 @@ assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= i
 // Works offline once it has been opened. setOffline doesn't reach the service worker's own requests, so the server
 // goes away instead, and the reload has to come from the cache.
 await page.waitForFunction(() => navigator.serviceWorker?.controller, null, { timeout: 10000 }).catch(() => {});
-assert.equal(await page.evaluate(() => caches.has('name-tag-v3')), true, "the service worker deleted another tool's offline copy");
-assert.equal(await page.evaluate(() => caches.has('tag-along-v0')), false, 'the service worker kept an old copy of this one');
+const shared = () => page.evaluate(async () => Object.fromEntries(await Promise.all(['name-tag-v3', 'tag-along-x-v1', 'tag-along-v0'].map(async k => [k, await caches.has(k)]))));
+const onlyOwnGone = { 'name-tag-v3': true, 'tag-along-x-v1': true, 'tag-along-v0': false };
+assert.deepEqual(await shared(), onlyOwnGone, 'the service worker deleted another tool\'s offline copy, or kept an old copy of this one');
+// The same when an update of this tool arrives, with an old copy of this one there again.
+swUpdate = '\n// an update\n';
+await page.evaluate(async () => {
+  await caches.open('tag-along-v0');
+  const reg = await navigator.serviceWorker.getRegistration(), before = reg.active;
+  await reg.update();
+  const sw = reg.installing || reg.waiting || reg.active;
+  if (sw === before) throw new Error('the service worker was not updated');
+  await new Promise((done, fail) => {
+    const now = () => { if (sw.state === 'activated') done(); else if (sw.state === 'redundant') fail(new Error('the update did not install')); };
+    sw.addEventListener('statechange', now); now();
+  });
+});
+assert.deepEqual(await shared(), onlyOwnGone, 'an update of the service worker deleted another tool\'s offline copy, or kept an old copy of this one');
 await new Promise(done => { server.closeAllConnections(); server.close(done); });
 await page.reload();
 assert.equal(await page.textContent('#num'), '#050', 'the page did not load offline');

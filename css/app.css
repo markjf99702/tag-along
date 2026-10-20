@@ -4,10 +4,10 @@
 @font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: swap; src: url("../fonts/jetbrains-mono-500.woff2") format("woff2"); }
 
 :root {
-  --bg: #F1EFE8; --panel: #FFFFFF; --ink: #1D1E1B; --ink2: #5C5F57; --ink3: #8B8E85; --line: #D8D6CC;
+  --bg: #F1EFE8; --panel: #FFFFFF; --ink: #1D1E1B; --ink2: #5C5F57; --ink3: #696C64; --line: #D8D6CC;
   --tape: #F3C22F; --tape-ink: #1D1E1B; --tape-edge: #C99A12;
   --go: #1D1E1B; --go-ink: #F6F4EC;
-  --ok: #2E7D4F; --ok-soft: #DDEFE3; --bad: #B3261E; --bad-soft: #F7DEDB; --wait: #8A6A10;
+  --ok: #2D794D; --ok-soft: #DDEFE3; --bad: #B3261E; --bad-soft: #F7DEDB; --wait: #866710;
   --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
   --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
@@ -15,7 +15,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #161714; --panel: #20221E; --ink: #ECEAE2; --ink2: #B1B4AA; --ink3: #7D8077; --line: #33362F;
+    --bg: #161714; --panel: #20221E; --ink: #ECEAE2; --ink2: #B1B4AA; --ink3: #888B82; --line: #33362F;
     --go: #F3C22F; --go-ink: #161714;
     --ok: #6CC08B; --ok-soft: #1E3327; --bad: #F08A80; --bad-soft: #3E211F; --wait: #E9C25A;
   }

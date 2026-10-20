@@ -93,8 +93,8 @@ const page = await ctx.newPage();
 watch(page);
 
 // A fresh phone for one check: its own storage, the pretend reader, no service worker.
-async function phone() {
-  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block' });
+async function phone(options = {}) {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, serviceWorkers: 'block', ...options });
   await c.addInitScript(fakeNfc);
   const p = await c.newPage();
   watch(p);
@@ -378,6 +378,26 @@ for (const fail of [undefined, 'NetworkError']) {
     const ring = await p.evaluate(() => { const e = document.activeElement, s = getComputedStyle(e); return { id: e.id, inside: e.matches(':focus-visible') && parseFloat(s.outlineOffset) + parseFloat(s.outlineWidth) <= 0 }; });
     assert.deepEqual(ring, { id, inside: true }, `the focus ring on #${id} is cut off`);
   }
+  await p.context().close();
+}
+
+// The small grey text (the captions, labels, the next tag's link, a skipped number, the footer) and the status line
+// in each of its colours stand out at least 4.5:1 from what's behind them, in the light palette and the dark one.
+for (const colorScheme of ['light', 'dark']) {
+  const p = await phone({ colorScheme });
+  await p.click('#skip'); await p.click('.settings summary');
+  const faint = await p.evaluate(() => {
+    const rgba = c => c.match(/[\d.]+/g).map(Number);
+    const lum = c => rgba(c).slice(0, 3).map(v => (v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+    const behind = e => { for (; e; e = e.parentElement) { const b = getComputedStyle(e).backgroundColor; if (rgba(b)[3] !== 0) return b; } return 'rgb(255, 255, 255)'; };
+    const ratio = e => { const [a, b] = [lum(getComputedStyle(e).color), lum(behind(e))].sort((x, y) => y - x); return (a + 0.05) / (b + 0.05); };
+    const out = [], check = (what, e) => { const r = ratio(e); if (r < 4.5) out.push(`${what} ${r.toFixed(2)}:1`); };
+    for (const sel of ['.tape-cap', '.field label', '.example', '.log li.skipped', '.jd-foot a']) for (const e of document.querySelectorAll(sel)) check(sel, e);
+    const status = document.querySelector('#status');
+    for (const kind of ['', 'wait', 'ok', 'bad']) { status.className = 'status ' + kind; check('#status.' + (kind || 'plain'), status); }
+    return out;
+  });
+  assert.deepEqual(faint, [], `text that's hard to read in the ${colorScheme} palette`);
   await p.context().close();
 }
 

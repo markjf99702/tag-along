@@ -1,4 +1,4 @@
-import { DEFAULTS, STOCKROOM, pad, urlFor, clean, describe, linkFrom } from './tags.js';
+import { DEFAULTS, PARTS_BIN, STOCKROOM, pad, urlFor, clean, fromSaved, describe, linkFrom } from './tags.js';
 
 const KEY = 'tagalong.v1';
 const $ = id => document.getElementById(id);
@@ -11,7 +11,7 @@ let checking = null; // AbortController while Check mode is listening
 
 // ---------------------------------------------------------------- storage
 function load() {
-  try { return clean(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return clean(null); }
+  try { return fromSaved(JSON.parse(localStorage.getItem(KEY) || 'null')); } catch { return clean(null); }
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* private window: still works this visit */ }
@@ -176,9 +176,10 @@ async function startChecking() {
     if (d.number != null) {
       const big = document.createElement('div'); big.className = 'big'; big.textContent = '#' + pad(d.number, settings.digits); out.append(big);
       const p = document.createElement('p');
+      const link = d.link === settings.prefix ? 'your link' : d.link === STOCKROOM ? 'the old Stockroom link' : 'the Parts Bin link';
       p.textContent = d.number < settings.next ? 'Already written (it\'s before your next number).'
-        : d.number === settings.next ? 'Written with your link, and it\'s your next number.'
-        : 'Written with your link, but ahead of your next number.';
+        : d.number === settings.next ? `Written with ${link}, and it's your next number.`
+        : `Written with ${link}, but ahead of your next number.`;
       out.append(p);
     }
     for (const line of d.lines) { const p = document.createElement('p'); const c = document.createElement('code'); c.textContent = line; p.append(c); out.append(p); }
@@ -221,7 +222,7 @@ $('prefix').onchange = e => {
   $('prefix-note').textContent = text && !link ? 'That isn\'t a link, so it wasn\'t saved. Links start with https:// and have no spaces.' : '';
   if (link) { settings = clean({ ...settings, prefix: link }); changed(); } else render();
 };
-$('reset-prefix').onclick = () => { $('prefix-note').textContent = ''; settings = clean({ ...settings, prefix: STOCKROOM }); changed(); };
+$('reset-prefix').onclick = () => { $('prefix-note').textContent = ''; settings = clean({ ...settings, prefix: PARTS_BIN }); changed(); };
 $('protect').onchange = e => { settings = clean({ ...settings, protect: e.target.checked }); changed(); };
 // Another tab wrote stickers or changed a setting: show the same here, so this tab doesn't write those numbers again.
 addEventListener('storage', e => { if (e.key === KEY || e.key === null) { settings = load(); render(); waiting?.abort(); } });

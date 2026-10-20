@@ -15,7 +15,7 @@
 - **Used stickers are left alone.** By default it won't write over a tag that already holds something, which also stops it renumbering the sticker you just wrote if it's still near the phone.
 - **Skip and back.** Skip a number (a sticker that tore, say) or step back one to redo it.
 - **Check a tag.** Hold any tag to the phone to see what's on it and which number it carries.
-- **Any link.** It starts with Stockroom's bag link, but the part before the number is a setting, as are the start number and how many digits to pad to.
+- **Any link.** It starts with Parts Bin's bag link, but the part before the number is a setting, as are the start number and how many digits to pad to. A phone that had the old Stockroom link moves to Parts Bin's, and Check still reads the number on a tag written with the old one.
 - **Nothing leaves the phone.** The settings and the next number are kept in the browser.
 
 Web NFC only works in Chrome on Android, on a page that is the whole tab (not inside another app's page or frame).

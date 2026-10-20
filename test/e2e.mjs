@@ -115,13 +115,13 @@ await page.goto(base);
 await page.evaluate(() => document.fonts.ready);
 
 
-// Starts at #001 and writes the Stockroom link for it.
+// Starts at #001 and writes the Parts Bin link for it.
 assert.equal(await page.textContent('#num'), '#001');
 await page.click('#go');
 await waitingFor(page, '#001');
 assert.ok(await page.evaluate(() => window.__tap()));
 await page.waitForFunction(() => document.querySelector('#num').textContent === '#002');
-assert.equal((await page.evaluate(() => window.__nfc.written))[0], 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/001');
+assert.equal((await page.evaluate(() => window.__nfc.written))[0], 'https://parts-bin.junkdrawer.works/#bag/001');
 // The loop waits, then asks for the next sticker; a used sticker is refused and the number doesn't move.
 await page.waitForFunction(() => /#002/.test(document.querySelector('#status').textContent), null, { timeout: 5000 });
 await page.evaluate(() => window.__tap({ fail: 'NotAllowedError' }));
@@ -292,12 +292,35 @@ for (const fail of [undefined, 'NetworkError']) {
   const p = await phone();
   await p.click('.settings summary');
   const setLink = async text => { await p.fill('#prefix', text); await p.dispatchEvent('#prefix', 'change'); return [await p.inputValue('#prefix'), await p.textContent('#prefix-note')]; };
-  assert.deepEqual(await setLink('parts-bin.junkdrawer.works/#bag/'), ['https://parts-bin.junkdrawer.works/#bag/', '']);
-  assert.equal(await p.textContent('#example'), 'https://parts-bin.junkdrawer.works/#bag/001');
-  assert.deepEqual(await setLink('https://example.com/my bags/'), ['https://parts-bin.junkdrawer.works/#bag/', 'That isn\'t a link, so it wasn\'t saved. Links start with https:// and have no spaces.']);
-  assert.deepEqual(await setLink(''), ['https://parts-bin.junkdrawer.works/#bag/', '']);
+  assert.deepEqual(await setLink('example.com/bags/#bag/'), ['https://example.com/bags/#bag/', '']);
+  assert.equal(await p.textContent('#example'), 'https://example.com/bags/#bag/001');
+  assert.deepEqual(await setLink('https://example.com/my bags/'), ['https://example.com/bags/#bag/', 'That isn\'t a link, so it wasn\'t saved. Links start with https:// and have no spaces.']);
+  assert.deepEqual(await setLink(''), ['https://example.com/bags/#bag/', '']);
   await p.reload();
-  assert.equal(await p.textContent('#example'), 'https://parts-bin.junkdrawer.works/#bag/001');
+  assert.equal(await p.textContent('#example'), 'https://example.com/bags/#bag/001');
+  await p.context().close();
+}
+
+// A phone that saved the old Stockroom link (the default until Parts Bin had its own address) writes Parts Bin's
+// from its next number on, a link typed in by hand stays, and "Use the Parts Bin link" puts Parts Bin's back.
+{
+  const PARTS_BIN = 'https://parts-bin.junkdrawer.works/#bag/', STOCKROOM = 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/';
+  const p = await phone();
+  const saved = prefix => p.evaluate(s => localStorage.setItem('tagalong.v1', JSON.stringify(s)), { prefix, digits: 3, next: 37, protect: true });
+  await saved(STOCKROOM); await p.reload();
+  await p.click('.settings summary');
+  assert.deepEqual([await p.textContent('#num'), await p.inputValue('#prefix'), await p.textContent('#example')], ['#037', PARTS_BIN, PARTS_BIN + '037']);
+  await p.click('#go'); await waitingFor(p, '#037');
+  await p.evaluate(() => window.__tap()); await statusIs(p, 'ok');
+  await p.click('#go');
+  assert.deepEqual(await p.evaluate(() => window.__nfc.written), [PARTS_BIN + '037']);
+  assert.deepEqual(await p.evaluate(() => JSON.parse(localStorage.getItem('tagalong.v1'))), { prefix: PARTS_BIN, digits: 3, next: 38, protect: true });
+  await saved('https://example.com/b/'); await p.reload();
+  await p.click('.settings summary');
+  assert.equal(await p.inputValue('#prefix'), 'https://example.com/b/');
+  assert.equal(await p.textContent('#reset-prefix'), 'Use the Parts Bin link');
+  await p.click('#reset-prefix');
+  assert.deepEqual([await p.inputValue('#prefix'), await p.textContent('#example')], [PARTS_BIN, PARTS_BIN + '037']);
   await p.context().close();
 }
 
@@ -329,16 +352,21 @@ for (const fail of [undefined, 'NetworkError']) {
 }
 
 
-// Check says where a tag's number stands against your next number, including when it is your next number.
+// Check says where a tag's number stands against your next number, including when it is your next number. A tag
+// written with the old Stockroom link still shows its number, and says which link it holds.
 {
+  const PARTS_BIN = 'https://parts-bin.junkdrawer.works/#bag/', STOCKROOM = 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/';
   const p = await phone();
   await p.evaluate(() => localStorage.setItem('tagalong.v1', JSON.stringify({ next: 12 })));
   await p.reload(); await p.click('#tab-check'); await p.click('#check-go');
   await p.waitForFunction(() => window.__nfc.scans.length > 0);
-  const read = async n => { await p.evaluate(n => window.__read([['url', 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/' + n]]), n); return p.textContent('#readout p'); };
-  assert.equal(await read('011'), 'Already written (it\'s before your next number).');
-  assert.equal(await read('012'), 'Written with your link, and it\'s your next number.');
-  assert.equal(await read('013'), 'Written with your link, but ahead of your next number.');
+  const read = async url => { await p.evaluate(url => window.__read([['url', url]]), url); return p.$$eval('#readout > :is(.big, p)', els => els.map(e => e.textContent)); };
+  assert.deepEqual(await read(PARTS_BIN + '011'), ['#011', 'Already written (it\'s before your next number).', PARTS_BIN + '011']);
+  assert.deepEqual(await read(PARTS_BIN + '012'), ['#012', 'Written with your link, and it\'s your next number.', PARTS_BIN + '012']);
+  assert.deepEqual(await read(PARTS_BIN + '013'), ['#013', 'Written with your link, but ahead of your next number.', PARTS_BIN + '013']);
+  assert.deepEqual(await read(STOCKROOM + '012'), ['#012', 'Written with the old Stockroom link, and it\'s your next number.', STOCKROOM + '012']);
+  assert.deepEqual(await read(STOCKROOM + '013'), ['#013', 'Written with the old Stockroom link, but ahead of your next number.', STOCKROOM + '013']);
+  assert.deepEqual(await read('https://example.com/b/012'), ['https://example.com/b/012', 'Not a link from the settings here.']);
   await p.context().close();
 }
 

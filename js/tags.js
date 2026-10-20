@@ -1,9 +1,13 @@
 // The parts that don't need a phone: what goes on a tag, and reading a number back off one.
 
+// Parts Bin's bag link: a tag with it opens that bag in Parts Bin.
+export const PARTS_BIN = 'https://parts-bin.junkdrawer.works/#bag/';
+// The bag link from before Parts Bin had its own address. Tags written with it carry the same bag numbers, and Parts
+// Bin still reads them (and offers to rewrite them).
 export const STOCKROOM = 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/';
 
 export const DEFAULTS = {
-  prefix: STOCKROOM,   // everything before the number
+  prefix: PARTS_BIN,   // everything before the number
   digits: 3,           // 7 -> 007
   next: 1,             // the number the next tag gets
   protect: true,       // refuse to write over a tag that already holds something
@@ -17,11 +21,18 @@ export function urlFor(n, { prefix, digits }) {
   return prefix + pad(n, digits);
 }
 
-// What number a link carries, if it was written with this prefix. Null if it wasn't.
-export function numberIn(url, { prefix }) {
-  if (typeof url !== 'string' || !url.startsWith(prefix)) return null;
-  const rest = url.slice(prefix.length);
-  return /^\d{1,6}$/.test(rest) ? Number(rest) : null;
+// What number a link carries, and which link it was written with: the one in the settings, Parts Bin's, or the old
+// Stockroom one (the same bags). Null if it isn't one of those followed by a number.
+export function readLink(url, { prefix }) {
+  if (typeof url !== 'string') return null;
+  for (const link of [prefix, PARTS_BIN, STOCKROOM]) {
+    const rest = url.startsWith(link) ? url.slice(link.length) : '';
+    if (/^\d{1,6}$/.test(rest)) return { number: Number(rest), link };
+  }
+  return null;
+}
+export function numberIn(url, settings) {
+  return readLink(url, settings)?.number ?? null;
 }
 
 // A link typed into the settings, tidied: an address without https:// gets it, and HTTPS:// is fine too.
@@ -44,12 +55,18 @@ export function clean(s) {
   return out;
 }
 
+// Settings as any version saved them. The old Stockroom link was the default before Parts Bin had its own address,
+// and every phone that wrote a sticker saved it: that one moves to Parts Bin's. Any other link stays.
+export function fromSaved(s) {
+  return clean(s && typeof s === 'object' && s.prefix === STOCKROOM ? { ...s, prefix: PARTS_BIN } : s);
+}
+
 // Turns what a phone read off a tag into a few plain lines.
 export function describe(message, settings) {
   const recs = message?.records || [];
   // a sticker can come formatted with one empty record: that's blank too
-  if (recs.every(r => r.recordType === 'empty')) return { blank: true, lines: ['Blank tag (nothing written yet).'], number: null };
-  const lines = []; let number = null;
+  if (recs.every(r => r.recordType === 'empty')) return { blank: true, lines: ['Blank tag (nothing written yet).'], number: null, link: null };
+  const lines = []; let number = null, link = null;
   for (const r of recs) {
     let text = '';
     try {
@@ -58,11 +75,11 @@ export function describe(message, settings) {
       }
     } catch { text = ''; }
     if (r.recordType === 'url' || r.recordType === 'absolute-url') {
-      const n = numberIn(text, settings);
-      if (n != null && number == null) number = n;
+      const got = readLink(text, settings);
+      if (got && number == null) ({ number, link } = got);
       lines.push(text);
     } else if (r.recordType === 'text') lines.push('Text: ' + text);
     else lines.push(`${/^[aeiou]/i.test(r.recordType) ? 'An' : 'A'} ${r.recordType} record`);
   }
-  return { blank: false, lines, number };
+  return { blank: false, lines, number, link };
 }

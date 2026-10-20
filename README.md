@@ -6,7 +6,7 @@
 
 <p align="center">
   <img src="docs/phone-write.png" width="250" alt="Write mode: a yellow label-maker tape reading #017 as the next tag, a green line saying #016 was written, and the numbers written so far listed below.">
-  <img src="docs/phone-check.png" width="250" alt="Check mode: a tag just read shows #012 in large type and the Stockroom link it holds.">
+  <img src="docs/phone-check.png" width="250" alt="Check mode: a tag just read shows #012 in large type and the Parts Bin link it holds.">
 </p>
 
 ## How it works

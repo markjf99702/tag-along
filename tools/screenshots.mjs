@@ -23,7 +23,7 @@ const fake = () => {
   window.__tap = () => { const p = pending; pending = null; p?.resolve(); };
   window.NDEFReader = class {
     async write() { return new Promise(r => { pending = { resolve: r }; }); }
-    async scan() { setTimeout(() => this.onreading?.({ message: { records: [{ recordType: 'url', data: new TextEncoder().encode('https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/012') }] } }), 50); }
+    async scan() { setTimeout(() => this.onreading?.({ message: { records: [{ recordType: 'url', data: new TextEncoder().encode('https://parts-bin.junkdrawer.works/#bag/012') }] } }), 50); }
   };
   navigator.vibrate = () => true;
   localStorage.setItem('tagalong.v1', JSON.stringify({ next: 12 }));

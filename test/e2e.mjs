@@ -355,7 +355,8 @@ for (const fail of [undefined, 'NetworkError']) {
 
 
 // Check says where a tag's number stands against your next number, including when it is your next number. A tag
-// written with the old Stockroom link still shows its number, and says which link it holds.
+// written with the old Stockroom link still shows its number, and says which link it holds, and so does a Parts Bin
+// tag when the link in the settings is another one.
 {
   const PARTS_BIN = 'https://parts-bin.junkdrawer.works/#bag/', STOCKROOM = 'https://claude.ai/artifact/3tWd7DUCw34ExEy7Jo4CpG#bag/';
   const p = await phone();
@@ -369,6 +370,11 @@ for (const fail of [undefined, 'NetworkError']) {
   assert.deepEqual(await read(STOCKROOM + '012'), ['#012', 'Written with the old Stockroom link, and it\'s your next number.', STOCKROOM + '012']);
   assert.deepEqual(await read(STOCKROOM + '013'), ['#013', 'Written with the old Stockroom link, but ahead of your next number.', STOCKROOM + '013']);
   assert.deepEqual(await read('https://example.com/b/012'), ['https://example.com/b/012', 'Not a link from the settings here.']);
+  await p.evaluate(() => localStorage.setItem('tagalong.v1', JSON.stringify({ prefix: 'https://example.com/b/', next: 12 })));
+  await p.reload(); await p.click('#tab-check'); await p.click('#check-go');
+  await p.waitForFunction(() => window.__nfc.scans.length > 0);
+  assert.deepEqual(await read(PARTS_BIN + '012'), ['#012', 'Written with the Parts Bin link, and it\'s your next number.', PARTS_BIN + '012']);
+  assert.deepEqual(await read('https://example.com/b/013'), ['#013', 'Written with your link, but ahead of your next number.', 'https://example.com/b/013']);
   await p.context().close();
 }
 
